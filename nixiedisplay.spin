@@ -10,10 +10,12 @@ pub Setup(sclpin, sdapin, amcpaddr, apcfaddr)
    mcp23017.start(sclpin, sdapin)
    pcf8574.start(sclpin, sdapin)
    mcpaddr := amcpaddr
-   pcfaddr := pcfaddr
+   pcfaddr := apcfaddr
    ' configure as output
    mcp23017.cfg_dira(0, mcpaddr)
    mcp23017.cfg_dirb(0, mcpaddr)
+   
+   dp:=0
 
 pub write_word(v)
    ' port a has the leftmost two digits
@@ -28,14 +30,14 @@ pub set_dp(v) | m
    ' to
    '     rightmost = 4 
    if (v==1)
-       dp:= (dp & $0F) | 1  
+       dp:= (dp & $F0) | 1  
    elseif (v==2)
-       dp:= (dp & $0F) | 2
+       dp:= (dp & $F0) | 2
    elseif (v==3)
-       dp:= (dp & $0F) | 4
+       dp:= (dp & $F0) | 4
    elseif (v==4)
-       dp:= (dp & $0F) | 8
+       dp:= (dp & $F0) | 8
    else
-       dp:= (dp & $0F)
+       dp:= (dp & $F0)
    pcf8574.wr_gpio(dp, pcfaddr)
    
