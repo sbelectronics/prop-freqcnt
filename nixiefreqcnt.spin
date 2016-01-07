@@ -1,6 +1,7 @@
 OBJ
   debugled: "debugled"
-  freqcnt: "freqcnt"
+  freqcnt_hi: "freqcnt"
+  freqcnt_lo: "freqcnt"
   lmx2322: "lmx2322"
   nixie1: "nixiedisplay"
   nixie2: "nixiedisplay"
@@ -10,14 +11,17 @@ CON
   UNIT_HZ = 0
   UNIT_KHZ = 1
   UNIT_MHZ = 2
+
+  PIN_MHZ = 4
 VAR
    byte disp0, disp1, disp2
    byte units
 
-pub main | v, debug0, debug1, debug2
+pub main | v, debug0, debug1, debug2, band
   units:=UNIT_HZ
 
-  freqcnt.Start(21)
+  freqcnt_hi.Start(21)   ' prescaled by 128
+  freqcnt_lo.Start(22)   ' raw
 
   lmx2322.Setup(18, 19, 20)
   lmx2322.WriteN(4, 0, 0)  ' divide by (32+1)*0, then divide by 32*(4-0) = divide by 128 
@@ -30,32 +34,38 @@ pub main | v, debug0, debug1, debug2
   debug2:=@disp2
 
   nixie1.Setup(28, 29, 1, 0)
-  'nixie2.Setup(29, 28, 3, 2)
+  nixie2.Setup(28, 29, 3, 2)
 
-  nixie1.write_word(bcd_four(1234,false))
-  nixie1.set_dp(3)
+  dira[PIN_MHZ] := 0
+
+  'nixie1.write_word(bcd_four(1234,false))
+  'nixie1.set_dp(3)        
 
   v:=0
   repeat
-      v := freqcnt.GetFreq / 100
-      debugdecimal(v)
+      band := ina[PIN_MHZ]
+      if band
+          v := freqcnt_hi.GetFreq * 128
+      else
+          v := freqcnt_lo.GetFreq
+      display_frequency(v)
       waitcnt(clkfreq/1000 * 100 + cnt)
 
 pub bcd_four(v,lz) | tmp
    ' convert a decimal value to four BCD digits
    ' if lz==True, then use leading zeros, otherwise use leading $A which nixie will output as blank
    tmp := 0
-   if lz or (v>1000)
+   if lz or (v=>1000)
       tmp := tmp | ((v/1000) << 12)
    else
       tmp := tmp | ($A<<12)
       
-   if lz or (v>100)
+   if lz or (v=>100)
       tmp := tmp | ((v//1000/100) << 8)
    else
       tmp := tmp | ($A<<8)
       
-   if lz or (v>10)
+   if lz or (v=>10)
       tmp := tmp | ((v//100/10) << 4)
    else
       tmp := tmp | ($A<<4)
@@ -71,8 +81,8 @@ pub bcd_two(v,lz) | tmp
    ' convert a decimal value to two BCD digits
    ' if lz==True, then use leading zeros, otherwise use leading $A which nixie will output as blank
    tmp := 0
-   if lz or (v>10)
-       tmp := tmp | ((v//100/10) << 8)
+   if lz or (v=>10)
+       tmp := tmp | ((v//100/10) << 4)
    else
        tmp := tmp | ($A<<4)
        
@@ -112,6 +122,8 @@ pub display_frequency(v) | mult, tmp, digs, dp, lo_word
       dp:=dp-1
       v:=v/10
 
+  debugdecimal(v)
+
   ' adjust decimal to count from the leftmost digit
   dp:=(6+1-dp)
 
@@ -126,18 +138,18 @@ pub display_frequency(v) | mult, tmp, digs, dp, lo_word
 
   ' write the next two digits and the units 
   if (units==UNIT_MHZ)
-      nixie2.write_word(lo_word << 8) ' add in M and Hz symbols
+      nixie2.write_word((lo_word << 8) | $57) ' add in M and Hz symbols
   elseif (units==UNIT_KHZ)
-      nixie2.write_word(lo_word << 8) ' add in K and Hz symbol
+      nixie2.write_word((lo_word << 8) | $47) ' add in K and Hz symbol
   else
-      nixie2.write_word(lo_word << 8) ' add in Hz symbol
+      nixie2.write_word((lo_word << 8) | $A7) ' add in Hz symbol
 
   ' set the decimal point
   if (dp=<4)
       ' decimal point is in first nixie bank
       nixie1.set_dp(dp)
       nixie2.set_dp(0)
-  elseif (dp<=6)
+  elseif (dp=<8)
       ' decimal point is in second nixie bank
       nixie1.set_dp(0)
       nixie2.set_dp(dp-4)
