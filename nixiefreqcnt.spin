@@ -12,7 +12,12 @@ CON
   UNIT_KHZ = 1
   UNIT_MHZ = 2
 
-  PIN_MHZ = 4
+  PIN_MHZ = 17
+  PIN_LMX2322_CLK = 18
+  PIN_LMX2322_DATA = 19
+  PIN_LMX2322_LE = 20
+  PIN_HIFREQ_IN = 21
+  PIN_LOFREQ_IN = 22
 VAR
    byte disp0, disp1, disp2
    byte units
@@ -20,11 +25,15 @@ VAR
 pub main | v, debug0, debug1, debug2, band
   units:=UNIT_HZ
 
-  freqcnt_hi.Start(21)   ' prescaled by 128
-  freqcnt_lo.Start(22)   ' raw
+  freqcnt_hi.Start(PIN_HIFREQ_IN)   ' prescaled by 128
+  freqcnt_lo.Start(PIN_LOFREQ_IN)   ' raw
 
-  lmx2322.Setup(18, 19, 20)
+  ' lmx2322 seems to take a few MS to get ready
+  waitcnt(clkfreq/1000 * 100 + cnt)  
+
+  lmx2322.Setup(PIN_LMX2322_CLK, PIN_LMX2322_DATA, PIN_LMX2322_LE)
   lmx2322.WriteN(4, 0, 0)  ' divide by (32+1)*0, then divide by 32*(4-0) = divide by 128 
+  'lmx2322.WriteN(8, 0, 0)
   lmx2322.WriteR(1, 0, 1, 1, 2) ' test, rs, pd_pol, cp_tri, r_cntr
 
   debugled.Display(@debug0, 0{pin})
@@ -39,7 +48,7 @@ pub main | v, debug0, debug1, debug2, band
   dira[PIN_MHZ] := 0
 
   'nixie1.write_word(bcd_four(1234,false))
-  'nixie1.set_dp(3)        
+  'nixie1.set_dp(3)
 
   v:=0
   repeat
@@ -104,7 +113,7 @@ pub display_frequency(v) | mult, tmp, digs, dp, lo_word
   ' count number of digits
   digs:=1
   tmp:=v
-  repeat while (tmp>10)
+  repeat while (tmp=>10)
       digs:=digs+1
       tmp:=tmp/10
 
