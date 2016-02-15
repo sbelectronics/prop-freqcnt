@@ -1,6 +1,6 @@
 CON
    ' correction factor for the clk loop
-   CORRECTION = 2950
+   CORRECTION = 2750
 
 VAR
    long InPin
