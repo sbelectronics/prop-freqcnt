@@ -1,40 +1,56 @@
+' Nixie Tube Frequency Counter
+' Scott Baker
+' http://www.smbaker.com/
+'
+' There are two input pipelines
+'     low freq (1Khz - 25 Mhz) - 74HC4046 
+'     high freq (10 Mhz - 2.4 Ghz) - MB506 + 74HC4046
+'
+' Alternatively, a lmx2322 can be used for the high freq pipeline
+
 OBJ
   debugled: "debugled"
   freqcnt_hi: "freqcnt"
   freqcnt_lo: "freqcnt"
-  lmx2322: "lmx2322"
+  ' uncomment if using lmx2322. Leave commented if using MB506
+  'lmx2322: "lmx2322"
   nixie1: "nixiedisplay"
   nixie2: "nixiedisplay"
 CON
-  _clkmode = xtal1 + pll16x
+  '_clkmode = xtal1 + pll16x
+  _clkmode = xinput + pll16x
   _xinfreq        = 5_000_000
   UNIT_HZ = 0
   UNIT_KHZ = 1
   UNIT_MHZ = 2
 
-  PIN_MHZ = 17
-  PIN_LMX2322_CLK = 18
-  PIN_LMX2322_DATA = 19
-  PIN_LMX2322_LE = 20
-  PIN_HIFREQ_IN = 21
-  PIN_LOFREQ_IN = 22
+  'PIN_MHZ = 17
+  'PIN_LMX2322_CLK = 18
+  'PIN_LMX2322_DATA = 19
+  'PIN_LMX2322_LE = 20
+  'PIN_HIFREQ_IN = 21
+  'PIN_LOFREQ_IN = 22
+
+  PIN_MHZ = 8
+  PIN_LMX2322_CLK = 9
+  PIN_LMX2322_DATA = 10
+  PIN_LMX2322_LE = 11
+  PIN_HIFREQ_IN = 12
+  PIN_LOFREQ_IN = 13  
 VAR
    byte disp0, disp1, disp2
    byte units
 
-pub main | v, debug0, debug1, debug2, band
+pub main | v, debug0, debug1, debug2, band, dpAdj
   units:=UNIT_HZ
 
   freqcnt_hi.Start(PIN_HIFREQ_IN)   ' prescaled by 128
   freqcnt_lo.Start(PIN_LOFREQ_IN)   ' raw
 
-  ' lmx2322 seems to take a few MS to get ready
-  waitcnt(clkfreq/1000 * 100 + cnt)  
-
-  lmx2322.Setup(PIN_LMX2322_CLK, PIN_LMX2322_DATA, PIN_LMX2322_LE)
-  lmx2322.WriteN(4, 0, 0)  ' divide by (32+1)*0, then divide by 32*(4-0) = divide by 128 
-  'lmx2322.WriteN(8, 0, 0)
-  lmx2322.WriteR(1, 0, 1, 1, 2) ' test, rs, pd_pol, cp_tri, r_cntr
+  ' Uncomment if using lmx2322. Leave commented if using MB506
+  'lmx2322.Setup(PIN_LMX2322_CLK, PIN_LMX2322_DATA, PIN_LMX2322_LE)
+  'lmx2322.WriteN(4, 0, 0)  ' divide by (32+1)*0, then divide by 32*(4-0) = divide by 128 
+  'lmx2322.WriteR(1, 0, 1, 1, 2) ' test, rs, pd_pol, cp_tri, r_cntr
 
   debugled.Display(@debug0, 0{pin})
 
@@ -54,10 +70,19 @@ pub main | v, debug0, debug1, debug2, band
   repeat
       band := ina[PIN_MHZ]
       if band
-          v := freqcnt_hi.GetFreq * 128
+          v := freqcnt_hi.GetFreq
+          if (v>16777215)
+              ' Unsigned variables are not allowed in spin, so
+              ' divide the input by 10, and then tell the display
+              ' code to move the decimal point.  
+              v:=(v/10)*128
+              dpAdj:=-1
+          else
+              v:=v * 128
+              dpAdj:=0
       else
           v := freqcnt_lo.GetFreq
-      display_frequency(v)
+      display_frequency(v, dpAdj)
       waitcnt(clkfreq/1000 * 100 + cnt)
 
 pub bcd_four(v,lz) | tmp
@@ -102,7 +127,7 @@ pub bcd_two(v,lz) | tmp
        
    return tmp
 
-pub display_frequency(v) | mult, tmp, digs, dp, lo_word
+pub display_frequency(v, dpAdj) | mult, tmp, digs, dp, lo_word
    if (v=>1100000) or ((units<>UNIT_KHZ) and (v=>1000000))
        units:=UNIT_MHZ
    elseif (v=>1100) or ((units<>UNIT_HZ) and (v=>1000))
@@ -133,6 +158,9 @@ pub display_frequency(v) | mult, tmp, digs, dp, lo_word
 
   debugdecimal(v)
 
+  ' adjust decimal if dpAdj was passed in 
+  dp:=dp+dpAdj
+  
   ' adjust decimal to count from the leftmost digit
   dp:=(6+1-dp)
 
