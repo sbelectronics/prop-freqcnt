@@ -1,3 +1,7 @@
+CON
+   ' correction factor for the clk loop
+   CORRECTION = 2950
+
 VAR
    long InPin
    long Gate
@@ -6,8 +10,8 @@ VAR
 
 PUB Start(finpin)
    InPin := finpin
-   Gate := 1000
-
+   Gate := 1000 
+            
    cognew(CountFreq, @myStack)
 
 PUB GetFreq
@@ -22,5 +26,5 @@ PRI CountFreq | freq
   FRQA := 1 'Count 1 pulses on each trigger
   repeat
     PHSA := 0 'Clear accumulated value
-    waitcnt(clkfreq/1000 * Gate + cnt)
+    waitcnt(clkfreq/1000 * Gate - CORRECTION + cnt)
     Frequency := PHSA * (1000/Gate)  
